@@ -2017,46 +2017,41 @@ public class PlanComponent extends JComponent implements PlanView, Scrollable, P
       // No levels, so print the plan as before
       return printSelectedLevel(g, pageFormat, pageIndex);
     }
-    else {  // If there are levels
-      int pagesPerLevel = getPrintedPageCountPerLevel(g, pageFormat);
-      if (pageIndex < 0 || pagesPerLevel == 0 || pageIndex >= pagesPerLevel * printedLevels.size()) {
+    int pagesPerLevel = getPrintedPageCountPerLevel(g, pageFormat);
+    if (pageIndex < 0 || pagesPerLevel == 0 || pageIndex >= pagesPerLevel * printedLevels.size()) {
+      return NO_SUCH_PAGE;
+    }
+    final Level printedLevel = printedLevels.get(pageIndex / pagesPerLevel);
+    final int levelPageIndex = pageIndex % pagesPerLevel;
+    if (EventQueue.isDispatchThread()) {
+      return printLevel(g, pageFormat, levelPageIndex, printedLevel);
+    } else {
+      // Change selected level in Event Dispatch Thread because views listen to it
+      final int [] pageExists = {NO_SUCH_PAGE};
+      try {
+        EventQueue.invokeAndWait(new Runnable() {
+          public void run() {
+            pageExists [0] = printLevel(g, pageFormat, levelPageIndex, printedLevel);
+          }
+        });
+      }
+      catch (InterruptedException ex) {
+        Thread.currentThread().interrupt();
         return NO_SUCH_PAGE;
       }
-      else {  // pageIndex is valid
-        final Level printedLevel = printedLevels.get(pageIndex / pagesPerLevel);
-        final int levelPageIndex = pageIndex % pagesPerLevel;
-        if (EventQueue.isDispatchThread()) {
-          return printLevel(g, pageFormat, levelPageIndex, printedLevel);
+      catch (InvocationTargetException ex) {
+        Throwable cause = ex.getCause();
+        if (cause instanceof RuntimeException) {
+          throw (RuntimeException)cause;
+        }
+        else if (cause instanceof Error) {
+          throw (Error)cause;
         }
         else {
-          // Change selected level in Event Dispatch Thread because views listen to it
-          final int[] pageExists = {NO_SUCH_PAGE};
-          try {
-            EventQueue.invokeAndWait(new Runnable() {
-              public void run() {
-                pageExists[0] = printLevel(g, pageFormat, levelPageIndex, printedLevel);
-              }
-            });
-          }
-          catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            return NO_SUCH_PAGE;
-          }
-          catch (InvocationTargetException ex) {
-            Throwable cause = ex.getCause();
-            if (cause instanceof RuntimeException) {
-              throw (RuntimeException) cause;
-            }
-            else if (cause instanceof Error) {
-              throw (Error) cause;
-            }
-            else {
-              throw new RuntimeException(cause);
-            }
-          }
-          return pageExists[0];
+          throw new RuntimeException(cause);
         }
       }
+      return pageExists [0];
     }
   }
 
